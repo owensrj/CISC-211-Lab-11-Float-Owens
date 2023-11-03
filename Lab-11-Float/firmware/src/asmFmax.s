@@ -64,7 +64,54 @@ nanValue: .word 0x7FFFFFFF
  .type initVariables,%function
 initVariables:
     /* YOUR initVariables CODE BELOW THIS LINE! Don't forget to push and pop! */
-
+    
+    /* Save callee-saved registers and link register*/
+    push {r4-r11,LR}
+    
+    ldr r4, =0  @ initialize r4 as zero register
+    
+    /* initialize f1* variables to zero */
+    ldr r5, =fMax
+    str r4, [r5]
+    ldr r6, =sb1
+    str r4, [r6]
+    ldr r7, =biasedExp1
+    str r4, [r7]
+    ldr r8, =exp1
+    str r4, [r8]
+    ldr r9, =mant1
+    str r10, [r9]
+    
+    /* initialize f2* variables to zero */
+    ldr r5, =f2
+    str r4, [r5]
+    ldr r6, =sb2
+    str r4, [r6]
+    ldr r7, =biasedExp2
+    str r4, [r7]
+    ldr r8, =exp2
+    str r4, [r8]
+    ldr r9, =mant2
+    str r10, [r9]
+    
+    /* initialize fMax variables to zero */
+    ldr r5, =fMax
+    str r4, [r5]
+    ldr r6, =signBitMax
+    str r4, [r6]
+    ldr r7, =biasedExpMax
+    str r4, [r7]
+    ldr r8, =expMax
+    str r4, [r8]
+    ldr r9, =mantMax
+    str r10, [r9]
+    
+    /* Restore callee-saved registers and link register */
+    pop {r4-r11,LR} 
+    
+    /*return to address pointed to by the link register */
+    bx lr 
+    
     /* YOUR initVariables CODE ABOVE THIS LINE! Don't forget to push and pop! */
 
     
@@ -81,8 +128,31 @@ initVariables:
 .type getSignBit,%function
 getSignBit:
     /* YOUR getSignBit CODE BELOW THIS LINE! Don't forget to push and pop! */
+    
+    /* Save callee-saved registers and link register*/
+    push {r4-r11,LR}
+    
+    /* Load the 32-bit float from the address in r0 into r4 */
+    ldr r4, [r0]  
+    
+    /* Load the mask for the sign bit into r3 */
+    ldr r3, =0x80000000
+    
+    /* Perform bitwise AND with floating point number & sign bit mask & update flags */
+    tst r4, r3  
+    
+    ldreq r4, =0      @ If zero flag is set (MSB of r4 is 0), set r4 to 0
+    ldrne r4, =1      @ If zero flag is clear (MSB of r4 is 1), set r4 to 1
 
-    /* YOUR getSignBit CODE ABOVE THIS LINE! Don't forget to push and pop! */
+    str r4, [r1]      @ Store the result to the address in r1
+   
+    /* Restore callee-saved registers and link register */
+    pop {r4-r11,LR} 
+    
+    /*return to address pointed to by the link register */
+    bx lr 
+    
+   /* YOUR getSignBit CODE ABOVE THIS LINE! Don't forget to push and pop! */
     
 
     
@@ -108,6 +178,36 @@ getSignBit:
 .type getExponent,%function
 getExponent:
     /* YOUR getExponent CODE BELOW THIS LINE! Don't forget to push and pop! */
+    /* Save callee-saved registers and link register */
+    push {r4-r11,LR}
+    
+    /* Load the 32-bit float from the address in r0 into r4 */
+    ldr r4, [r0]
+    
+    /* Initialize r5 as a mask to test exponent bits (all 8 bits from bit 23 to bit 30 are set to 1)*/
+    ldr r5, =0x7F800000
+    
+    /* Isolate the exponent bits in r4 by using an AND operation */
+    and r4, r4, r5
+    
+    /* Shift the exponent bits to the LSB's of the register for storage */
+    lsr r4, r4, 23
+     
+    /* Store the biased exponent to the appropriate return address in r1 */
+    str r4, [r1]
+    
+    /* Calculate unbiased exponent */
+    ldr r6, =127   @ initializes r6 to 127 to calculate unbiased exponent 
+    sub r4, r4, r6 @ unbiased exponent == biased exponent-127
+    
+    /* Store the unbiased exponent to the appropriate return address in r2 */
+    str r4, [r2]
+    
+    /* Restore callee-saved registers and link register */
+    pop {r4-r11,LR}
+    
+    /* Return to address pointed to by the link register */
+    bx lr
     
     /* YOUR getExponent CODE ABOVE THIS LINE! Don't forget to push and pop! */
    
@@ -126,6 +226,27 @@ getExponent:
 .type getMantissa,%function
 getMantissa:
     /* YOUR getMantissa CODE BELOW THIS LINE! Don't forget to push and pop! */
+    
+    /* Save callee-saved registers and link register */
+    push {r4-r11,LR}
+    
+    /* Load the 32-bit float from the address in r0 into r4 */
+    ldr r4, [r0]
+    
+    /* Initialize r5 as a mask to isolate mantissa bits (all 23 bits from bit 0 to bit 22 are set to 1) */
+    ldr r5, =0x7FFFFF
+    
+    /* Isolate the mantissa bits in r4 by using an AND operation */
+    and r4, r4, r5
+    
+    /* Store the mantissa to the address in r1 */
+    str r2, [r1]
+    
+   /* Restore callee-saved registers and link register */
+    pop {r4-r11,LR}
+    
+    /* Return to address pointed to by the link register */
+    bx lr 
     
     /* YOUR getMantissa CODE ABOVE THIS LINE! Don't forget to push and pop! */
    
@@ -164,6 +285,83 @@ asmFmax:
 
     /* YOUR asmFmax CODE BELOW THIS LINE! VVVVVVVVVVVVVVVVVVVVV  */
     
+    /* Save callee-saved registers and link register */
+    push {r4-r11,LR}
+    
+    /* First, let's compare the sign bits. */
+    ldr r6, =sb1
+    bl getSignBit
+    ldr r7, [r6]
+    ldr r8, =sb2
+    bl getSignBit
+    ldr r9, [r8]
+    
+    cmp r7, r9
+    beq .SameSign  /* If both numbers have the same sign bit, move to next comparison */
+    
+    /* If signs are different, the one with the sign bit 0 is greater */
+    teq r7, #0
+    moveq r6, r4
+    b .StoreAndExit
+    teq r9, #0
+    moveq r6, r5
+    b .StoreAndExit
+    
+.SameSign:
+    /* Compare exponents next */
+    ldr r6, =biasedExp1
+    ldr r8, =exp1
+    bl getExponent
+    ldr r7, [r6]
+    ldr r9, [r8]
+    
+    ldr r6, =biasedExp2
+    ldr r8, =exp2
+    bl getExponent
+    ldr r10, [r6]
+    ldr r11, [r8]
+    
+    cmp r9, r11
+    beq .SameExponent  /* If both numbers have the same exponent, move to next comparison */
+    
+    /* Whichever has larger exponent is greater */
+    cmp r9, r11
+    movgt r6, r4
+    movle r6, r5
+    b .StoreAndExit
+    
+.SameExponent:
+    /* Lastly, compare mantissas */
+    ldr r6, =mant1
+    bl getMantissa
+    ldr r7, [r6]
+    ldr r8, =mant2
+    bl getMantissa
+    ldr r9, [r8]
+    
+    cmp r7, r9
+    /* Whichever has larger mantissa is greater, if they are equal, it doesn't matter */
+    movge r6, r4
+    movlt r6, r5
+    
+.StoreAndExit:
+    /* Storing maximum value and updating other global variables accordingly */
+    ldr r7, =fMax
+    str r6, [r7]
+    
+    /* Unpack the larger number */
+    ldr r6, =signBitMax
+    bl getSignBit
+    ldr r7, =biasedExpMax
+    ldr r8, =expMax
+    bl getExponent
+    ldr r9, =mantMax
+    bl getMantissa
+    /* Restore callee-saved registers and link register */
+    pop {r4-r11,LR}
+    
+    /* Return to address pointed to by the link register */
+    bx lr 
     
     /* YOUR asmFmax CODE ABOVE THIS LINE! ^^^^^^^^^^^^^^^^^^^^^  */
 
